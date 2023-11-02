@@ -22,6 +22,7 @@ package org.openregistry.core.service;
 import org.apache.commons.lang.*;
 import org.openregistry.core.domain.*;
 import org.openregistry.core.domain.DisclosureSettings.PropertyNames;
+import org.openregistry.core.domain.jpa.JpaNameImpl;
 import org.openregistry.core.domain.sor.*;
 import org.openregistry.core.repository.*;
 import org.openregistry.core.service.identifier.*;
@@ -172,7 +173,8 @@ public class DefaultPersonService implements PersonService {
         try {
             return this.personRepository.findByPersonIdAndSorIdentifier(personId, sorSourceIdentifier);
         } catch (final Exception e) {
-            logger.debug(e.getMessage(), e);
+            //logger.debug(e.getMessage(), e);
+            logger.debug(e.getMessage());
             return null;
         }
     }
@@ -841,13 +843,16 @@ public class DefaultPersonService implements PersonService {
         boolean preferred = false;
         boolean official = false;
 
+        // exclude Chosen name and Directory Listing Name from being Official and Preferred.
         for (final Name name : person.getNames()) {
-            if (!preferred && name.sameAs(preferredName)) {
+            if (!preferred && name.sameAs(preferredName) && (name.getType().getDescription().equalsIgnoreCase("LEGAL")
+                    || name.getType().getDescription().equalsIgnoreCase("FORMAL"))) {
                 name.setPreferredName(true);
                 preferred = true;
             }
 
-            if (!official && name.sameAs(officialName)) {
+            if (!official && name.sameAs(officialName) && (name.getType().getDescription().equalsIgnoreCase("LEGAL")
+                    || name.getType().getDescription().equalsIgnoreCase("FORMAL"))) {
                 name.setOfficialName(true);
                 official = true;
             }
@@ -868,21 +873,40 @@ public class DefaultPersonService implements PersonService {
      * @param sorPersons
      */
     protected void copySorNamesToPerson(final Person person, final List<SorPerson> sorPersons) {
-        person.getNames().clear();
-        
+
+        //person.getNames().clear();
+
+        Set<? extends Name> personNames = person.getNames();
+        boolean person_has_chosen_name = false;
+        for (Iterator<? extends Name> iterator = personNames.iterator(); iterator.hasNext();) {
+            Name name =  iterator.next();
+            if (!name.getType().getDescription().equals(Type.NameTypes.CHOSEN.name())) {
+                iterator.remove();
+            } else {
+                person_has_chosen_name = true;
+            }
+        }
+
+
         for (final SorPerson sorPerson : sorPersons) {
             for (final SorName sorName : sorPerson.getNames()) {
                 boolean alreadyAdded = false;
 
                 for (final Name calculatedName : person.getNames()) {
-                    if (calculatedName.sameAs(sorName)) {
+                    if (calculatedName.sameAs(sorName)
+                            && calculatedName.getType().getDescription().equals(
+                            sorName.getType().getDescription()))
+                    {
                         alreadyAdded = true;
                         break;
                     }
                 }
 
-                if (!alreadyAdded) {
-                    person.addName(sorName);
+                if (!alreadyAdded &&
+                        (!sorName.getType().getDescription().equals(Type.NameTypes.CHOSEN.name()) ||
+                                !person_has_chosen_name)
+                ) {
+                        person.addName(sorName);
                 }
             }
         }
@@ -1015,4 +1039,95 @@ public class DefaultPersonService implements PersonService {
     public void setIdCardGenerator(IdCardGenerator idCardGenerator) {
         this.idCardGenerator = idCardGenerator;
     }
+
+
+    /**
+     * add or update preferred name
+     *
+     * @param person the Person to update.
+     * @param sorPerson the SorPerson to update.
+     * @param chosenName the preferred name to add or update.
+     * @return Result of updating.
+     */
+    public boolean addOrUpdateChosenName(Person person, SorPerson sorPerson,
+                                            String chosenName){
+
+        logger.info("Preferred Name: " + chosenName);
+        // Update SorPerson
+        boolean sorHasChosenName = false;
+        SorName newChosenSorName = null;
+        String lastName = null;
+        String middleName = null;
+        for (SorName sorName : sorPerson.getNames()) {
+            if (sorName.getType().getDescription().equals(Type.NameTypes.CHOSEN.name())) {
+                sorHasChosenName = true;
+                // update
+                sorName.setGiven(chosenName);
+                newChosenSorName = sorName;
+                logger.info("The SOR person already has Chosen name: update it");
+            } else {
+                if (sorName.getType().getDescription().equals(Type.NameTypes.FORMAL.name())
+                        || sorName.getType().getDescription().equals(Type.NameTypes.LEGAL.name())) {
+                    lastName = sorName.getFamily();
+                    middleName = sorName.getMiddle();
+                }
+            }
+        }
+
+        logger.info("Found formal/legal lastName: " + lastName + " middle name: " + middleName);
+        if (!sorHasChosenName) {
+            // add new Chosen name to the SorPerson
+            logger.info("The SOR person does not have Chosen name: add it");
+            newChosenSorName = sorPerson.addName(referenceRepository.findType(Type.DataTypes.NAME, Type.NameTypes.CHOSEN));
+            newChosenSorName.setGiven(chosenName);
+            newChosenSorName.setMiddle(middleName);
+            newChosenSorName.setFamily(lastName);
+        }
+
+        try {
+            this.personRepository.saveSorPerson(sorPerson);
+            logger.info("Sor person is saved");
+        } catch (Exception e) {
+            logger.error("Error in saving the sor person for the Chosen name");
+            return false;
+        }
+
+        newChosenSorName = null;
+        // get the newly saved sor chosen name
+        logger.info("to get the saved new sor chosen name");
+        for (SorName sorName: sorPerson.getNames()) {
+            if (sorName.getType().getDescription().equalsIgnoreCase(Type.NameTypes.CHOSEN.name())) {
+                newChosenSorName = sorName;
+                break;
+            }
+        }
+
+        if (newChosenSorName == null) {
+            logger.error("Something is wrong. The sor Chosen name has not been saved successfully");
+            return false;
+        }
+
+        // Update Person
+        JpaNameImpl existingChosenName = (JpaNameImpl)person.getChosenName();
+        if (existingChosenName != null) { // update
+            logger.info("The Person already has Chosen name: update it");
+            existingChosenName.setFamily(newChosenSorName.getFamily());
+            existingChosenName.setGiven(newChosenSorName.getGiven());
+            existingChosenName.setMiddle(newChosenSorName.getMiddle());
+            existingChosenName.setSourceNameId(newChosenSorName.getId());
+        } else { // add new
+            logger.info("The Person does not have Chosen name: Add it");
+            person.addName(newChosenSorName);
+        }
+
+        try {
+            this.personRepository.savePerson(person);
+            logger.info("sor person is saved");
+        } catch (Exception e) {
+            logger.error("Error in saving the Person for the chosen name");
+            return false;
+        }
+        return true;
+    }
+
 }

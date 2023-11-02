@@ -145,11 +145,51 @@ public class JpaPersonImpl extends Entity implements Person {
     	return null;
     }
 
-    //TODO really don't need this.  Should replace code with getOfficialName().getFormattedName()
-    public String getFormattedName(){
-        return this.getOfficialName().getFormattedName();
+    public Name getPreferredName() {
+
+        Set<? extends Name> names = this.getNames();
+        for(Name name: names) {
+            if (name.isPreferredName()) {
+                return name;
+            }
+        }
+        return null;
     }
 
+    public Name getChosenName() {
+        Set<? extends Name> names = this.getNames();
+        for(Name name: names) {
+            //if (name.getType().getDescription().equals(Type.NameTypes.CHOSEN.name())) {
+            if (name.getType().getDescription().equalsIgnoreCase("CHOSEN")) {
+                return name;
+            }
+        }
+        return null;
+    }
+
+    public Name getUniversityName() {
+        JpaNameImpl newChosenName = (JpaNameImpl)getChosenName();
+        Name officialName = getOfficialName();
+        JpaNameImpl resultName =  new JpaNameImpl();
+        resultName.setFamily(officialName.getFamily());
+        resultName.setMiddle(officialName.getMiddle());
+        resultName.setGiven(officialName.getGiven());
+        resultName.setPrefix(officialName.getPrefix());
+        resultName.setSuffix(officialName.getSuffix());
+
+        if (newChosenName != null) {
+            resultName.setGiven(newChosenName.getGiven());
+        }
+        return resultName;
+    }
+
+    //TODO really don't need this.  Should replace code with getOfficialName().getFormattedName()
+    public String getFormattedName(){
+        //return this.getOfficialName().getFormattedName();
+        return this.getUniversityName().getFormattedName();
+    }
+
+    /* Not used
     public Name getPreferredName() {
        	Set<? extends Name> names = this.getNames();
     	for(final Name name: names) {
@@ -158,7 +198,7 @@ public class JpaPersonImpl extends Entity implements Person {
     		}
     	}
     	return null;
-    }
+    }*/
 
     public String getGender() {
         return this.gender;
@@ -184,7 +224,7 @@ public class JpaPersonImpl extends Entity implements Person {
     }
 
     /**
-     * @see org.openregistry.core.domain.Person#setDisclosureSettings(org.openregistry.core.domain.sor.SorDisclosureSettings)
+     * @see org.openregistry.core.domain.Person # setDisclosureSettings(org.openregistry.core.domain.sor.SorDisclosureSettings)
      */
 	public void calculateDisclosureSettings(SorDisclosureSettings ds) {
 		if (ds != null) {

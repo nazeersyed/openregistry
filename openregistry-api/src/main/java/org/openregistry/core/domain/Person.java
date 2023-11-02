@@ -102,6 +102,21 @@ public interface Person extends Serializable {
      */
     Name getPreferredName();
 
+
+    /**
+     * Get the chosen name of the person.
+     *
+     * @return the chosen name of the person, never null.
+     */
+    Name getChosenName();
+
+    /**
+     * Get the university name of the person.
+     *
+     * @return the university ame of the person, never null.
+     */
+    Name getUniversityName();
+
     Name getOfficialName();
 
     /**
@@ -168,9 +183,7 @@ public interface Person extends Serializable {
 
     /**
      * add existing Id card object to the list of ID cards of person
-     * @param cardNumber
-     * @param cardSecurityValue
-     * @param barCode
+     * @param idCard
      * @return
      */
 

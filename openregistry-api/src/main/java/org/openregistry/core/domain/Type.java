@@ -50,7 +50,7 @@ public interface Type extends Serializable {
 
     enum PhoneTypes {LANDLINE, CELL, PAGER, FAX, OTHER}
 
-    enum NameTypes {LEGAL, FORMAL, AKA, MAIDEN, FKA}
+    enum NameTypes {LEGAL, FORMAL, AKA, MAIDEN, FKA, CHOSEN}
 
     enum AffiliationTypes {
     	FACULTY("FACULTY"), 
@@ -64,8 +64,9 @@ public interface Type extends Serializable {
     	GUEST("GUEST"), 
     	ALUM("ALUMNI"), 
     	RETIREE("RETIREE"), 
-    	FOUNDATION("FOUNDATION");
-    	
+    	FOUNDATION("FOUNDATION"),
+        EMERITUS("EMERITUS") ;
+
     	private String description;
     	
     	AffiliationTypes (String description) {
